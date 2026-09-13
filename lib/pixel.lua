@@ -59,9 +59,9 @@ function Pixel.cards()
 	return Pixel.cardbuffer
 end
 
-function Pixel.getCard(x,y,suit,num)
+function Pixel.getCard(x,y,buffer,suit,num)
 	if not Pixel.cardbuffer then return nil end
-	gpu.bitblt(0,x,y,3,3,Pixel.cardbuffer,num*3-2,suit*3-2)
+	gpu.bitblt(buffer,x,y,3,3,Pixel.cardbuffer,num*3-2,suit*3-2)
 end
 
 return Pixel
