@@ -138,11 +138,12 @@ end
 
 local function bankoswitch(number,score)
 	if score < 3 then return true end
-	if score < 4 and number ~= 8 then return true end
-	if number < 8 then return true end
-	if score < 5 and number >= 2 then return true end
-	if score < 6 and number >= 4 then return true end
-	if score < 7 and number >= 6 then return true end
+	if number == 8 then return false end
+	if score < 4 then return true end
+	if number == 9 then return false end
+	if score < 5 and number > 1 then return true end
+	if score < 6 and number > 3 then return true end
+	if score < 7 and number > 5 then return true end
 	return false
 end
 
@@ -171,7 +172,7 @@ local function game(data)
 	if data.puntosum%10 <= 5 then
 		local number = putCard{table=data.punto, buffer=data.puntobuffer,sum=data.puntosum,yt=6,yc=9}
 		data.puntosum = data.puntosum + number
-		if bankoswitch(clamp(number,1,10),data.bankosum) then
+		if bankoswitch(clamp(number,1,10),data.bankosum%10) then
 			data.bankosum = data.bankosum + putCard{table=data.banko, buffer=data.bankobuffer,sum=data.bankosum,yt=2,yc=1}
 		end
 	elseif data.bankosum%10 <= 5 then
