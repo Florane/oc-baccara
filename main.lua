@@ -44,61 +44,74 @@ local function loading(data)
 
 	graphics:kill()
 
-	return "prestart"
-end
-
-local function prestart(data)
-	gpu.fill(1,1,33,9," ")
-	gpu.set(3,2,"Place your bet")
-
-	data.bet = 0
-	data.select = 1
-
 	return "start"
 end
 
 local function start(data)
-	local betstring = tostring(data.bet)
-	gpu.fill(1,4,33,2," ")
-	gpu.set(10,4,"Balance: "..tostring(data.balance))
-	gpu.set((33-string.len(betstring))//2,5,betstring)
+	data.bet = 0
+	data.select = 1
 
-	local values = {"100","500","1000","5000","10000","50000"}
+	local next = "start"
+	local mainthread = thread.create(function()
+		gpu.fill(1,1,33,9," ")
+		gpu.set(3,2,"Place your bet")
 
-	local l = 3
-	for i,v in ipairs(values) do
-		if i == data.select then
-			gpu.setBackground(0xffffff)
-			gpu.setForeground(0x006d00)
+
+		local values = {"100","500","1000","5000","10000","50000"}
+		while true do
+			local betstring = tostring(data.bet)
+			gpu.fill(1,4,33,2," ")
+			gpu.set(10,4,"Balance: "..tostring(data.balance))
+			gpu.set((33-string.len(betstring))//2,5,betstring)
+
+			local l = 3
+			for i,v in ipairs(values) do
+				if i == data.select then
+					gpu.setBackground(0xffffff)
+					gpu.setForeground(0x006d00)
+				end
+				gpu.set(l,7,tostring(v))
+				if i == data.select then
+					gpu.setForeground(0xffffff)
+					gpu.setBackground(0x006d00)
+				end
+				l = l + 1 + string.len(v)
+			end
+			local _,_,_,code = event.pull("key_down")
+
+			if code == 205 then
+				data.select = data.select+1
+				if data.select > 6 then data.select = 1 end
+			elseif code == 203 then
+				data.select = data.select-1
+				if data.select < 1 then data.select = 6 end
+			elseif code == 200 then
+				data.bet = data.bet + tonumber(values[data.select])
+				if data.bet > data.balance then data.bet = data.balance end
+			elseif code == 208 then
+				data.bet = data.bet - tonumber(values[data.select])
+				if data.bet < 0 then data.bet = 0 end
+			elseif code == 28 and data.bet > 0 then
+				next = "pregame"
+				return 0
+			elseif code == 16 then
+				next = "mainMenu"
+				return 0
+			end
 		end
-		gpu.set(l,7,tostring(v))
-		if i == data.select then
-			gpu.setForeground(0xffffff)
-			gpu.setBackground(0x006d00)
-		end
-		l = l + 1 + string.len(v)
-	end
-	local _,_,_,code = event.pull("key_down")
+	end)
 
-	if code == 205 then
-		data.select = data.select+1
-		if data.select > 6 then data.select = 1 end
-	elseif code == 203 then
-		data.select = data.select-1
-		if data.select < 1 then data.select = 6 end
-	elseif code == 200 then
-		data.bet = data.bet + tonumber(values[data.select])
-		if data.bet > data.balance then data.bet = data.balance end
-	elseif code == 208 then
-		data.bet = data.bet - tonumber(values[data.select])
-		if data.bet < 0 then data.bet = 0 end
-	elseif code == 28 and data.bet > 0 then
-		return "pregame"
-	elseif code == 16 then
-		return "mainMenu"
-	end
+	local diskthread = thread.create(function()
+		local _ = event.pull("component_removed",nil,"drive")
+		next = "mainMenu"
+		return 0
+	end)
 
-	return "start"
+	thread.waitForAny({mainthread,diskthread})
+	mainthread:kill()
+	diskthread:kill()
+
+	return next
 end
 
 local function pregame(data)
@@ -124,7 +137,7 @@ local function addCards(x,y,buffer,hand)
 	gpu.setBackground(0x006d00)
 	gpu.fill(1,1,11,3," ")
 	for i=1,#hand do
-		gpu.bitblt(buffer,(4-#hand)*2-5+i*4,1,3,3,pixel.cardbuffer,hand[i][2]*3-2,hand[i][1]*3-2)
+		pixel.getCard((4-#hand)*2-5+i*4,1,buffer,hand[i][1],hand[i][2])
 	end
 	gpu.bitblt(0,x,y,11,3,buffer)
 	gpu.setActiveBuffer(0)
@@ -199,8 +212,14 @@ local function win(data)
 		data.balance = data.balance + data.bet
 	elseif data.win == "Banko!" then
 		data.balance = data.balance - data.bet
+	else
+		return "pregame"
 	end
-	return "prestart"
+
+	if #component.list("drive") == 0 then return "mainMenu" end
+	component.drive.writeSector(2,tostring(data.balance))
+	if data.balance == 0 then return "mainMenu" end
+	return "start"
 end
 
 local function main()
@@ -213,7 +232,6 @@ local function main()
 	local stateMachine = {}
 	stateMachine["mainMenu"] = mainMenu
 	stateMachine["loading"] = loading
-	stateMachine["prestart"] = prestart
 	stateMachine["start"] = start
 	stateMachine["pregame"] = pregame
 	stateMachine["game"] = game
