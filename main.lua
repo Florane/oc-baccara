@@ -4,6 +4,7 @@ local component = require("component")
 local gpu = component.gpu
 local event = require("event")
 local thread = require("thread")
+local safe = require("safeclient")
 
 local function mainMenu()
 	gpu.bitblt(0,1,1,33,9,pixel.background(),1,1)
@@ -38,9 +39,14 @@ local function loading(data)
 			os.sleep(0.5)
 		end
 	end)
-	data.playerid = tonumber(component.drive.readSector(1)) or 0
-	data.balance = tonumber(component.drive.readSector(2)) or -1
-	if data.balance < 0 then data.balance = 5000 end
+	data.playerid = string.sub(component.drive.readSector(1),1,8) or "nil"
+	if data.playerid ~= "nil" then safe.init(data.playerid) end
+	data.balance = safe.getBalance()
+	if data.balance < 0 then
+		data.balance = 5000
+		data.playerid = "nil"
+		safe.player_id = "nil"
+	end
 
 	graphics:kill()
 
@@ -215,9 +221,10 @@ local function win(data)
 	else
 		return "pregame"
 	end
+	safe.setBalance(data.balance)
+	safe.save()
 
-	if #component.list("drive") == 0 then return "mainMenu" end
-	component.drive.writeSector(2,tostring(data.balance))
+	for _,_ in pairs(component.list("drive")) do return "mainMenu" end
 	if data.balance == 0 then return "mainMenu" end
 	return "start"
 end
