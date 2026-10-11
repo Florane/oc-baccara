@@ -55,56 +55,72 @@ end
 
 local function start(data)
 	data.bet = 0
-	data.select = 1
+	data.betOn = "Punto!"
+	data.select = data.select or 1
 
 	local next = "start"
 	local mainthread = thread.create(function()
 		gpu.fill(1,1,33,9," ")
-		gpu.set(3,2,"Place your bet")
 
+		local denoms = {100,500,1000,5000,10000}
 
-		local values = {"100","500","1000","5000","10000","50000"}
 		while true do
-			local betstring = tostring(data.bet)
-			gpu.fill(1,4,33,2," ")
-			gpu.set(10,4,"Balance: "..tostring(data.balance))
-			gpu.set((33-string.len(betstring))//2,5,betstring)
+			pixel.chipTable(2,1,"PUNTO")
+			pixel.chipTable(13,1,"BANKO")
+			pixel.chipTable(24,1,"TIE")
 
-			local l = 3
-			for i,v in ipairs(values) do
-				if i == data.select then
-					gpu.setBackground(0xffffff)
-					gpu.setForeground(0x006d00)
-				end
-				gpu.set(l,7,tostring(v))
-				if i == data.select then
-					gpu.setForeground(0xffffff)
-					gpu.setBackground(0x006d00)
-				end
-				l = l + 1 + string.len(v)
+			pixel.chip(14,6,denoms[data.select])
+			pixel.chip(2,6,data.balance)
+
+			gpu.setBackground(pixel.TABLE)
+			gpu.setForeground(pixel.TABLEDARK)
+			gpu.set(26,7,"     ")
+			if data.bet > 0 then
+				gpu.set(26,7,"START")
+
+				local shift = 0
+				if data.betOn == "Banko!" then shift=11 end
+				if data.betOn == "Tie!" then shift=22 end
+				pixel.chip(3+shift,2,data.bet)
 			end
-			local _,_,_,code = event.pull("key_down")
 
-			if code == 205 then
-				data.select = data.select+1
-				if data.select > 6 then data.select = 1 end
-			elseif code == 203 then
-				data.select = data.select-1
-				if data.select < 1 then data.select = 6 end
-			elseif code == 200 then
-				data.bet = data.bet + tonumber(values[data.select])
-				if data.bet > data.balance then data.bet = data.balance end
-			elseif code == 208 then
-				data.bet = data.bet - tonumber(values[data.select])
-				if data.bet < 0 then data.bet = 0 end
-			elseif code == 28 and data.bet > 0 then
-				next = "pregame"
-				return 0
-			elseif code == 16 then
-				next = "mainMenu"
-				return 0
+			gpu.setForeground(0xffffff)
+			gpu.set(12,7,"<")
+			gpu.set(22,7,">")
+			local _,_,x,y = event.pull("touch")
+			gpu.set(1,10,string.format("%d %d   ",x,y))
+			if y>=2 and y<=4 then
+				if x>=2 and x<=10 then
+					if data.betOn ~= "Punto!" then data.betOn = "Punto!"
+					else data.bet = data.bet+denoms[data.select] end
+				elseif x>=2+11 and x<=10+11 then
+					if data.betOn ~= "Banko!" then data.betOn = "Banko!"
+					else data.bet = data.bet+denoms[data.select] end
+				elseif x>=2+22 and x<=10+22 then
+					if data.betOn ~= "Tie!" then data.betOn = "Tie!"
+					else data.bet = data.bet+denoms[data.select] end
+				end
+				if data.bet == 0 then data.bet = data.bet+denoms[data.select] end
+			elseif y>=6 and y<=8 then
+				if x>=14 and x<=20 then
+					data.bet = data.bet-denoms[data.select]
+				elseif x>=25 and x<=31 and data.bet>0 then
+					next = "pregame"
+					return 0
+				elseif x>=11 and x<=13 then
+					data.select = data.select-1
+					if data.select<1 then data.select=5 end
+				elseif x>=21 and x<=23 then
+					data.select = data.select + 1
+					if data.select>5 then data.select=1 end
+				end
+			end
+
+			if data.bet < 0 then data.bet=0
+			elseif data.bet > data.balance then data.bet=data.balance
 			end
 		end
+
 	end)
 
 	local diskthread = thread.create(function()
@@ -214,26 +230,29 @@ local function win(data)
 		os.sleep(0.5)
 		background, foreground = foreground, background
 	end
-	if data.win == "Punto!" then
+	if data.win == data.betOn then
+		if data.win == "Tie!" then data.balance = data.balance + data.bet*7 end
+		if data.win == "Banko!" then data.balance = data.balance - data.bet//20 end
 		data.balance = data.balance + data.bet
-	elseif data.win == "Banko!" then
-		data.balance = data.balance - data.bet
-	else
+	elseif data.win == "Tie!" then
 		return "pregame"
+	else
+		data.balance = data.balance - data.bet
 	end
 	safe.setBalance(data.balance)
 	safe.save()
 
-	for _,_ in pairs(component.list("drive")) do return "mainMenu" end
-	if data.balance == 0 then return "mainMenu" end
-	return "start"
+	local exit = "mainMenu"
+	for _,_ in pairs(component.list("drive")) do exit="start" end
+	if data.balance == 0 then exit="mainMenu" end
+	return exit
 end
 
 local function main()
 	pixel.cards()
 	pixel.background()
 	cards.init(6)
-	--gpu.setResolution(33,9)
+	gpu.setResolution(33,9)
 
 	local select = "mainMenu"
 	local stateMachine = {}
